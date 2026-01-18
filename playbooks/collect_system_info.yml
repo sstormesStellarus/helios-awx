@@ -1,0 +1,316 @@
+---
+# Playbook: Collect System Information
+# Description: Gathers comprehensive system information from all hosts
+#              in the Lab Hosts inventory, organized by OS groups.
+#
+# Inventory Groups:
+#   - fedora: argus, helios, hermes
+#   - ubuntu: nebula, vega
+#   - qnap: storage (limited shell capabilities)
+
+- name: Collect System Information - Fedora Hosts
+  hosts: fedora
+  gather_facts: true
+  ignore_unreachable: true
+  become: true
+
+  tasks:
+    - name: Get disk usage
+      ansible.builtin.command: df -h
+      register: disk_usage
+      changed_when: false
+
+    - name: Get memory details
+      ansible.builtin.command: free -h
+      register: memory_details
+      changed_when: false
+
+    - name: Get uptime
+      ansible.builtin.command: uptime -p
+      register: system_uptime
+      changed_when: false
+
+    - name: Get running services count
+      ansible.builtin.shell: systemctl list-units --type=service --state=running --no-pager | grep -c '\.service'
+      register: running_services
+      changed_when: false
+      failed_when: false
+
+    - name: Get installed packages count
+      ansible.builtin.shell: rpm -qa | wc -l
+      register: package_count
+      changed_when: false
+
+    - name: Get SELinux status
+      ansible.builtin.command: getenforce
+      register: selinux_status
+      changed_when: false
+      failed_when: false
+
+    - name: Get firewalld status
+      ansible.builtin.command: firewall-cmd --state
+      register: firewall_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display Fedora System Information
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          SYSTEM REPORT: {{ inventory_hostname | upper }}
+          ============================================================
+
+          OPERATING SYSTEM
+            Distribution:     {{ ansible_distribution }} {{ ansible_distribution_version }}
+            Kernel:           {{ ansible_kernel }}
+            Architecture:     {{ ansible_architecture }}
+
+          HARDWARE
+            Hostname:         {{ ansible_hostname }}
+            FQDN:             {{ ansible_fqdn | default(ansible_hostname) }}
+            CPU:              {{ ansible_processor[2] | default('N/A') }}
+            CPU Cores:        {{ ansible_processor_vcpus }}
+            Total Memory:     {{ ansible_memtotal_mb }} MB
+            Free Memory:      {{ ansible_memfree_mb }} MB
+            Swap Total:       {{ ansible_swaptotal_mb }} MB
+
+          NETWORK
+            Primary IP:       {{ ansible_default_ipv4.address | default('N/A') }}
+            Gateway:          {{ ansible_default_ipv4.gateway | default('N/A') }}
+            MAC Address:      {{ ansible_default_ipv4.macaddress | default('N/A') }}
+            DNS Servers:      {{ ansible_dns.nameservers | default([]) | join(', ') }}
+
+          STORAGE
+          {{ disk_usage.stdout | indent(2) }}
+
+          MEMORY
+          {{ memory_details.stdout | indent(2) }}
+
+          VIRTUALIZATION
+            Type:             {{ ansible_virtualization_type | default('N/A') }}
+            Role:             {{ ansible_virtualization_role | default('N/A') }}
+
+          SYSTEM STATUS
+            Uptime:           {{ system_uptime.stdout }}
+            Running Services: {{ running_services.stdout | default('N/A') }}
+            Installed Pkgs:   {{ package_count.stdout }}
+            SELinux:          {{ selinux_status.stdout | default('N/A') }}
+            Firewall:         {{ firewall_status.stdout | default('N/A') }}
+            Python:           {{ ansible_python_version }}
+          ============================================================
+
+
+- name: Collect System Information - Ubuntu Hosts
+  hosts: ubuntu
+  gather_facts: true
+  ignore_unreachable: true
+  become: true
+
+  tasks:
+    - name: Get disk usage
+      ansible.builtin.command: df -h
+      register: disk_usage
+      changed_when: false
+
+    - name: Get memory details
+      ansible.builtin.command: free -h
+      register: memory_details
+      changed_when: false
+
+    - name: Get uptime
+      ansible.builtin.command: uptime -p
+      register: system_uptime
+      changed_when: false
+
+    - name: Get running services count
+      ansible.builtin.shell: systemctl list-units --type=service --state=running --no-pager | grep -c '\.service'
+      register: running_services
+      changed_when: false
+      failed_when: false
+
+    - name: Get installed packages count
+      ansible.builtin.shell: dpkg -l | grep -c '^ii'
+      register: package_count
+      changed_when: false
+
+    - name: Get UFW status
+      ansible.builtin.command: ufw status
+      register: firewall_status
+      changed_when: false
+      failed_when: false
+
+    - name: Check if Raspberry Pi
+      ansible.builtin.stat:
+        path: /proc/device-tree/model
+      register: pi_check
+
+    - name: Get Raspberry Pi model
+      ansible.builtin.command: cat /proc/device-tree/model
+      register: pi_model
+      changed_when: false
+      when: pi_check.stat.exists
+
+    - name: Get CPU temperature (Raspberry Pi)
+      ansible.builtin.command: vcgencmd measure_temp
+      register: cpu_temp
+      changed_when: false
+      failed_when: false
+      when: pi_check.stat.exists
+
+    - name: Display Ubuntu System Information
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          SYSTEM REPORT: {{ inventory_hostname | upper }}
+          ============================================================
+
+          OPERATING SYSTEM
+            Distribution:     {{ ansible_distribution }} {{ ansible_distribution_version }}
+            Codename:         {{ ansible_distribution_release }}
+            Kernel:           {{ ansible_kernel }}
+            Architecture:     {{ ansible_architecture }}
+          {% if pi_check.stat.exists %}
+            Pi Model:         {{ pi_model.stdout | default('N/A') }}
+            CPU Temp:         {{ cpu_temp.stdout | default('N/A') }}
+          {% endif %}
+
+          HARDWARE
+            Hostname:         {{ ansible_hostname }}
+            FQDN:             {{ ansible_fqdn | default(ansible_hostname) }}
+            CPU:              {{ ansible_processor[2] | default('N/A') }}
+            CPU Cores:        {{ ansible_processor_vcpus }}
+            Total Memory:     {{ ansible_memtotal_mb }} MB
+            Free Memory:      {{ ansible_memfree_mb }} MB
+            Swap Total:       {{ ansible_swaptotal_mb }} MB
+
+          NETWORK
+            Primary IP:       {{ ansible_default_ipv4.address | default('N/A') }}
+            Gateway:          {{ ansible_default_ipv4.gateway | default('N/A') }}
+            MAC Address:      {{ ansible_default_ipv4.macaddress | default('N/A') }}
+            DNS Servers:      {{ ansible_dns.nameservers | default([]) | join(', ') }}
+
+          STORAGE
+          {{ disk_usage.stdout | indent(2) }}
+
+          MEMORY
+          {{ memory_details.stdout | indent(2) }}
+
+          VIRTUALIZATION
+            Type:             {{ ansible_virtualization_type | default('N/A') }}
+            Role:             {{ ansible_virtualization_role | default('N/A') }}
+
+          SYSTEM STATUS
+            Uptime:           {{ system_uptime.stdout }}
+            Running Services: {{ running_services.stdout | default('N/A') }}
+            Installed Pkgs:   {{ package_count.stdout }}
+            Firewall (UFW):   {{ firewall_status.stdout_lines[0] | default('N/A') }}
+            Python:           {{ ansible_python_version }}
+          ============================================================
+
+
+- name: Collect System Information - QNAP NAS
+  hosts: qnap
+  gather_facts: false
+  ignore_unreachable: true
+
+  tasks:
+    - name: Get QNAP system info
+      ansible.builtin.raw: uname -a
+      register: uname_info
+      changed_when: false
+
+    - name: Get QNAP hostname
+      ansible.builtin.raw: hostname
+      register: qnap_hostname
+      changed_when: false
+
+    - name: Get disk usage
+      ansible.builtin.raw: df -h
+      register: disk_usage
+      changed_when: false
+
+    - name: Get memory info
+      ansible.builtin.raw: free -m 2>/dev/null || cat /proc/meminfo | head -5
+      register: memory_info
+      changed_when: false
+
+    - name: Get uptime
+      ansible.builtin.raw: uptime
+      register: system_uptime
+      changed_when: false
+
+    - name: Get network interfaces
+      ansible.builtin.raw: ip addr show 2>/dev/null || ifconfig -a
+      register: network_info
+      changed_when: false
+
+    - name: Get QNAP firmware version
+      ansible.builtin.raw: cat /etc/config/uLinux.conf 2>/dev/null | grep -E "^(Firmware|Model)" || cat /etc/version 2>/dev/null || echo "Version info not available"
+      register: firmware_info
+      changed_when: false
+      failed_when: false
+
+    - name: Get running processes count
+      ansible.builtin.raw: ps aux 2>/dev/null | wc -l || ps | wc -l
+      register: process_count
+      changed_when: false
+
+    - name: Display QNAP System Information
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          SYSTEM REPORT: {{ inventory_hostname | upper }} (QNAP NAS)
+          ============================================================
+
+          SYSTEM
+            Hostname:         {{ qnap_hostname.stdout | trim }}
+            Kernel:           {{ uname_info.stdout | trim }}
+
+          FIRMWARE
+          {{ firmware_info.stdout | indent(2) }}
+
+          STORAGE
+          {{ disk_usage.stdout | indent(2) }}
+
+          MEMORY
+          {{ memory_info.stdout | indent(2) }}
+
+          NETWORK
+          {{ network_info.stdout | default('N/A') | indent(2) }}
+
+          STATUS
+            Uptime:           {{ system_uptime.stdout | trim }}
+            Processes:        {{ process_count.stdout | trim }}
+          ============================================================
+
+
+- name: Generate Consolidated Summary
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: Display inventory summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          INVENTORY SUMMARY - Lab Hosts
+          ============================================================
+
+          FEDORA HOSTS ({{ groups['fedora'] | length }}):
+          {% for host in groups['fedora'] %}
+            - {{ host }}
+          {% endfor %}
+
+          UBUNTU HOSTS ({{ groups['ubuntu'] | length }}):
+          {% for host in groups['ubuntu'] %}
+            - {{ host }}
+          {% endfor %}
+
+          QNAP DEVICES ({{ groups['qnap'] | length }}):
+          {% for host in groups['qnap'] %}
+            - {{ host }}
+          {% endfor %}
+
+          TOTAL HOSTS: {{ groups['all'] | length }}
+          ============================================================
