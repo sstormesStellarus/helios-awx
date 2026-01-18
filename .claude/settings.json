@@ -1,0 +1,3 @@
+{
+  "instructions": "Always use the Ansible Tower MCP server (ansible-tower) for AWX API interactions. If MCP tools are unavailable, use the AWX REST API at https://awx.home.brainstormes.org/api/v2/ with the token from ~/.claude/settings.json"
+}
